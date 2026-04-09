@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0d0d11" />
+<title>IPTV Player</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--bg0:#0d0d11;--bg1:#16161e;--bg2:#1e1e28;--bg3:#28283a;--acc:#7F77DD;--acc2:#534AB7;--tx0:#f0f0f5;--tx1:#9090a8;--tx2:#50505e;--red:#e24b4a;--amb:#ef9f27;--rad:8px}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg0)}
+.app{background:var(--bg0);color:var(--tx0);font-family:system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── topbar ── */
+.topbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--bg1);border-bottom:0.5px solid var(--bg3);flex-shrink:0;position:relative;z-index:100;flex-wrap:nowrap}
+.brand{font-size:15px;font-weight:500;color:var(--acc);flex-shrink:0}
+.nav-tabs{display:flex;gap:3px;flex-shrink:0}
+.ntab{font-size:12px;padding:5px 12px;border-radius:99px;border:2px solid transparent;background:transparent;color:var(--tx1);cursor:pointer}
+.ntab:hover,.ntab:focus{background:var(--bg3);color:var(--tx0);outline:none}
+.ntab.on{background:var(--acc2);color:#fff}
+.ntab:focus-visible{border-color:var(--acc)}
+.nbadge{font-size:9px;background:var(--red);color:#fff;border-radius:99px;padding:1px 4px;margin-left:2px}
+.filters{display:flex;gap:5px;align-items:center;flex:1;justify-content:flex-end;flex-wrap:nowrap;min-width:0}
+.filters input{background:var(--bg2);border:0.5px solid var(--bg3);border-radius:var(--rad);color:var(--tx0);font-size:12px;padding:5px 8px;width:140px;outline:none}
+.filters input:focus{border-color:var(--acc)}
+.cnt{font-size:10px;color:var(--tx2);white-space:nowrap;flex-shrink:0}
+
+/* ── dropdowns ── */
+.dropdown-wrap{position:relative;flex-shrink:0}
+.dd-btn{background:var(--bg2);border:2px solid var(--bg3);border-radius:var(--rad);color:var(--tx1);font-size:11px;padding:5px 10px;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.dd-btn:hover,.dd-btn:focus,.dd-btn.on{background:var(--bg3);color:var(--tx0);outline:none}
+.dd-btn:focus-visible,.dd-btn.on{border-color:var(--acc)}
+.dd-btn.active-filter{border-color:var(--acc);color:var(--acc)}
+.dd-arrow{font-size:9px;transition:transform .15s}
+.dd-btn.on .dd-arrow{transform:rotate(180deg)}
+.dd-menu{position:absolute;top:calc(100% + 4px);left:0;background:var(--bg1);border:0.5px solid var(--bg3);border-radius:var(--rad);padding:6px;min-width:210px;z-index:200;display:none;flex-direction:column;gap:2px;max-height:340px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--bg3) transparent}
+.dd-menu.open{display:flex}
+.dd-menu.right{left:auto;right:0}
+.dd-section{font-size:9px;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em;padding:6px 6px 3px;border-top:0.5px solid var(--bg3);margin-top:2px}
+.dd-section:first-child{border-top:none;margin-top:0}
+.dd-item{display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--tx1);border:2px solid transparent}
+.dd-item:hover,.dd-item:focus{background:var(--bg2);color:var(--tx0);outline:none}
+.dd-item:focus-visible{border-color:var(--acc)}
+.dd-item.on{background:var(--acc2);color:#fff}
+.dd-check{width:14px;height:14px;border-radius:3px;border:0.5px solid var(--bg3);display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0}
+.dd-item.on .dd-check{background:var(--acc);border-color:var(--acc)}
+
+/* ── main layout ── */
+.main{display:flex;flex:1;min-height:0;overflow:hidden}
+.sidebar{width:230px;min-width:230px;display:flex;flex-direction:column;background:var(--bg1);border-right:0.5px solid var(--bg3);transition:width .2s,min-width .2s;overflow:hidden;flex-shrink:0}
+.sidebar.collapsed{width:0;min-width:0;border-right:none}
+.sb-head{padding:7px 10px;border-bottom:0.5px solid var(--bg3);flex-shrink:0;font-size:10px;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em}
+.ch-list{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--bg3) transparent}
+.ch-list::-webkit-scrollbar{width:3px}
+.ch-list::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
+.ch-row{display:flex;align-items:center;gap:7px;padding:7px 9px;cursor:pointer;border-bottom:0.5px solid var(--bg2);border-left:3px solid transparent;outline:none}
+.ch-row:hover,.ch-row:focus{background:var(--bg2)}
+.ch-row:focus-visible{border-left-color:var(--acc)}
+.ch-row.on{background:var(--bg3);border-left-color:var(--acc)}
+.ch-logo-sm{width:30px;height:30px;border-radius:5px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;color:var(--tx1);overflow:hidden;flex-shrink:0;border:0.5px solid var(--bg3)}
+.ch-logo-sm img{width:100%;height:100%;object-fit:contain}
+.ch-info{flex:1;min-width:0}
+.ch-nm{font-size:12px;color:var(--tx0);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-co{font-size:9px;color:var(--tx2)}
+.fav-btn{font-size:13px;color:var(--tx2);flex-shrink:0;padding:0 3px;cursor:pointer;line-height:1;background:none;border:none}
+.fav-btn:hover,.fav-btn.on{color:var(--amb)}
+
+/* ── player ── */
+.player-col{flex:1;display:flex;flex-direction:column;min-width:0;background:#000}
+.video-wrap{flex:1;display:flex;align-items:stretch;background:#000;position:relative;min-height:0}
+video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+.vid-overlay{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.vid-msg{color:#fff;font-size:14px;opacity:.65;text-align:center;padding:16px;line-height:1.6}
+.zap-hint{position:absolute;top:12px;right:14px;font-size:11px;color:rgba(255,255,255,.22);text-align:right;line-height:2;pointer-events:none}
+.vol-bar{position:absolute;left:16px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:5px;opacity:0;transition:opacity .3s;pointer-events:none}
+.vol-bar.show{opacity:1}
+.vol-track{width:5px;height:90px;background:var(--bg3);border-radius:4px;position:relative;overflow:hidden}
+.vol-fill{position:absolute;bottom:0;left:0;right:0;background:var(--acc);border-radius:4px;transition:height .1s}
+.vol-label{font-size:11px;color:#fff;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px}
+.ch-osd{position:absolute;bottom:64px;left:14px;background:rgba(0,0,0,.82);border:0.5px solid var(--bg3);border-radius:var(--rad);padding:10px 16px;display:none;min-width:180px}
+.osd-num{font-size:10px;color:var(--tx2)}
+.osd-name{font-size:16px;font-weight:500;color:var(--tx0)}
+.osd-grp{font-size:11px;color:var(--tx1)}
+
+/* ── control bar ── */
+.ctrl-bar{display:flex;align-items:center;gap:7px;padding:8px 14px;background:var(--bg1);border-top:0.5px solid var(--bg3);flex-shrink:0;flex-wrap:nowrap}
+.ctrl-btn{background:var(--bg2);border:2px solid var(--bg3);border-radius:var(--rad);color:var(--tx1);font-size:12px;padding:6px 10px;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.ctrl-btn:hover,.ctrl-btn:focus{background:var(--bg3);color:var(--tx0);outline:none}
+.ctrl-btn:focus-visible{border-color:var(--acc)}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--bg3);flex-shrink:0}
+.live-dot.on{background:var(--red)}.live-dot.loading{background:var(--amb)}
+.now-info{flex:1;min-width:0}
+.now-name{font-size:13px;color:var(--tx0);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.now-sub{font-size:10px;color:var(--tx2)}
+.zap-btns{display:flex;gap:3px;flex-shrink:0}
+.zap-btn{background:var(--bg2);border:2px solid var(--bg3);border-radius:var(--rad);color:var(--tx1);font-size:13px;padding:5px 11px;cursor:pointer;line-height:1}
+.zap-btn:hover,.zap-btn:focus{background:var(--bg3);color:var(--tx0);outline:none}
+.zap-btn:focus-visible{border-color:var(--acc)}
+.qual-sel{background:var(--bg2);border:2px solid var(--bg3);border-radius:var(--rad);color:var(--tx1);font-size:10px;padding:5px 6px;cursor:pointer;outline:none;flex-shrink:0}
+.qual-sel:focus{border-color:var(--acc)}
+.url-row{display:flex;gap:4px;flex-shrink:0}
+.url-row input{background:var(--bg0);border:0.5px solid var(--bg3);border-radius:var(--rad);color:var(--tx0);font-size:10px;padding:5px 7px;outline:none;width:150px}
+.url-row input:focus{border-color:var(--acc)}
+.url-row button{background:var(--acc2);border:none;border-radius:var(--rad);color:#fff;font-size:10px;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.url-row button:hover,.url-row button:focus{background:var(--acc);outline:none}
+
+/* ── misc ── */
+.empty-s{padding:32px 16px;text-align:center;font-size:12px;color:var(--tx2)}
+.loading-s{display:flex;align-items:center;gap:8px;padding:20px;font-size:12px;color:var(--tx2)}
+.spin{width:14px;height:14px;border:2px solid var(--bg3);border-top-color:var(--acc);border-radius:50%;animation:sp .7s linear infinite;flex-shrink:0}
+@keyframes sp{to{transform:rotate(360deg)}}
+.hist-list{padding:6px}
+.hist-row{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rad);cursor:pointer;border:2px solid transparent;outline:none}
+.hist-row:hover,.hist-row:focus{background:var(--bg2)}
+.hist-row:focus-visible{border-color:var(--acc)}
+.hist-logo{width:30px;height:30px;border-radius:5px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--tx1);overflow:hidden;flex-shrink:0}
+.hist-logo img{width:100%;height:100%;object-fit:contain}
+
+/* ── Android TV: scale up focus rings ── */
+@media (hover:none){
+  .ntab:focus,.dd-btn:focus,.dd-item:focus,.ch-row:focus,.ctrl-btn:focus,.zap-btn:focus,.hist-row:focus{
+    border-color:var(--acc) !important;
+    background:var(--bg3) !important;
+    color:var(--tx0) !important;
+  }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <div class="topbar">
+    <span class="brand">▶ IPTV</span>
+    <div class="nav-tabs">
+      <button class="ntab on" onclick="setTab('all')" tabindex="1">Todos</button>
+      <button class="ntab" onclick="setTab('favs')" tabindex="2">Favoritos <span class="nbadge" id="fav-count">0</span></button>
+      <button class="ntab" onclick="setTab('hist')" tabindex="3">Historial <span class="nbadge" id="hist-count">0</span></button>
+    </div>
+    <div class="filters">
+      <input id="search" placeholder="Buscar canal..." oninput="doSearch()" tabindex="4" />
+      <div class="dropdown-wrap">
+        <button class="dd-btn" id="dd-btn-lista" onclick="toggleDD('lista')" tabindex="5">
+          <span id="lista-label">Argentina</span><span class="dd-arrow">▼</span>
+        </button>
+        <div class="dd-menu" id="dd-menu-lista">
+          <div class="dd-section">Lista de canales</div>
+          <div class="dd-item on" id="lista-ar" onclick="setLista('ar')" tabindex="0">
+            <div class="dd-check">✓</div>Argentina (ar.m3u)
+          </div>
+          <div class="dd-item" id="lista-spa" onclick="setLista('spa')" tabindex="0">
+            <div class="dd-check"></div>En español (spa.m3u)
+          </div>
+        </div>
+      </div>
+      <div class="dropdown-wrap">
+        <button class="dd-btn" id="dd-btn-filtros" onclick="toggleDD('filtros')" tabindex="6">
+          <span id="filtros-label">Filtros</span><span class="dd-arrow">▼</span>
+        </button>
+        <div class="dd-menu right" id="dd-menu-filtros">
+          <div class="dd-section">País</div>
+          <div id="country-items"></div>
+          <div class="dd-section">Categoría</div>
+          <div id="group-items"></div>
+        </div>
+      </div>
+      <select class="qual-sel" id="qual-sel" onchange="changeQuality()" tabindex="7" title="Calidad">
+        <option value="auto">Auto calidad</option>
+        <option value="low">Baja (menos buffering)</option>
+        <option value="mid">Media</option>
+      </select>
+      <span class="cnt" id="cnt">Cargando...</span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="sidebar" id="sidebar">
+      <div class="sb-head" id="sb-label">Canales</div>
+      <div class="ch-list" id="ch-list" role="listbox" aria-label="Lista de canales">
+        <div class="loading-s"><div class="spin"></div>Cargando...</div>
+      </div>
+    </div>
+
+    <div class="player-col">
+      <div class="video-wrap">
+        <video id="vid" controls></video>
+        <div class="vid-overlay" id="vid-overlay">
+          <div class="vid-msg" id="vid-msg">Seleccioná un canal de la lista<br><span style="font-size:11px;opacity:.6">← → Zapping · ↑ ↓ Volumen · F Pantalla completa</span></div>
+        </div>
+        <div class="zap-hint">← → Zapping<br>↑ ↓ Volumen<br>F Pantalla completa</div>
+        <div class="vol-bar" id="vol-bar">
+          <div class="vol-track"><div class="vol-fill" id="vol-fill" style="height:100%"></div></div>
+          <div class="vol-label" id="vol-label">100%</div>
+        </div>
+        <div class="ch-osd" id="ch-osd">
+          <div class="osd-num" id="osd-num"></div>
+          <div class="osd-name" id="osd-name"></div>
+          <div class="osd-grp" id="osd-grp"></div>
+        </div>
+      </div>
+
+      <div class="ctrl-bar">
+        <button class="ctrl-btn" id="toggle-btn" onclick="toggleSidebar()" tabindex="10">◀ Ocultar</button>
+        <div class="live-dot" id="live-dot"></div>
+        <div class="now-info">
+          <div class="now-name" id="now-name">Sin canal</div>
+          <div class="now-sub" id="now-sub">← → zapping · ↑ ↓ volumen · F pantalla completa</div>
+        </div>
+        <div class="zap-btns">
+          <button class="zap-btn" onclick="zapPrev()" tabindex="11" title="Canal anterior">◀</button>
+          <button class="zap-btn" onclick="zapNext()" tabindex="12" title="Canal siguiente">▶</button>
+        </div>
+        <div class="url-row">
+          <input id="durl" placeholder="URL directa..." tabindex="13" />
+          <button onclick="playDirect()" tabindex="14">▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let hls=null,all=[],favs=new Set(),hist=[],activeIdx=-1,curTab='all',curGroup='Todos',curCountry='',curSearch='',sidebarOpen=true,filtered=[],volTimer=null;
+const LISTAS={ar:{url:'https://iptv-org.github.io/iptv/countries/ar.m3u',label:'Argentina'},spa:{url:'https://iptv-org.github.io/iptv/languages/spa.m3u',label:'En español'}};
+
+async function loadLista(key){
+  curGroup='Todos';curCountry='';curSearch='';
+  document.getElementById('search').value='';
+  document.getElementById('ch-list').innerHTML='<div class="loading-s"><div class="spin"></div>Cargando...</div>';
+  document.getElementById('cnt').textContent='Cargando...';
+  try{
+    const r=await fetch(LISTAS[key].url);
+    const t=await r.text();
+    all=parseM3U(t);
+    document.getElementById('cnt').textContent=all.length+' canales';
+    document.getElementById('lista-label').textContent=LISTAS[key].label;
+    buildFilterMenus();applyFilter();
+  }catch(e){
+    document.getElementById('ch-list').innerHTML='<div class="empty-s">No se pudo cargar la lista.</div>';
+    document.getElementById('cnt').textContent='Error';
+  }
+}
+
+function parseM3U(txt){
+  const lines=txt.split('\n').map(l=>l.trim());
+  const chs=[];let cur={};
+  for(const l of lines){
+    if(l.startsWith('#EXTINF')){
+      cur={};
+      const nm=l.match(/,(.+)$/);cur.name=nm?nm[1].trim():'Canal';
+      const lo=l.match(/tvg-logo="([^"]*)"/);cur.logo=lo?lo[1]:'';
+      const gr=l.match(/group-title="([^"]*)"/);cur.group=gr&&gr[1]?gr[1]:'General';
+      const co=l.match(/tvg-country="([^"]*)"/);cur.country=co?co[1].toUpperCase():'';
+    }else if(!l.startsWith('#')&&l.length>4&&cur.name){
+      cur.url=l;chs.push({...cur});cur={};
+    }
+  }
+  return chs;
+}
+
+function buildFilterMenus(){
+  const countries=[...new Set(all.map(c=>c.country).filter(Boolean))].sort();
+  const groups=[...new Set(all.map(c=>c.group).filter(Boolean))].sort();
+  const ci=document.getElementById('country-items');
+  const gi=document.getElementById('group-items');
+  ci.innerHTML=makeItem('','Todos los países',curCountry==='','setCountry(\'\')','0')
+    +countries.map((c,i)=>makeItem(c,c,curCountry===c,`setCountry('${esc(c)}')`,'0')).join('');
+  gi.innerHTML=makeItem('Todos','Todas las categorías',curGroup==='Todos','setGroup(\'Todos\')','0')
+    +groups.map(g=>makeItem(g,g,curGroup===g,`setGroup('${esc(g)}')`,'0')).join('');
+  updateFiltrosLabel();
+}
+function makeItem(val,label,isOn,onclick,tab){
+  return`<div class="dd-item${isOn?' on':''}" onclick="${onclick}" tabindex="${tab}" onkeydown="if(event.key==='Enter'||event.key===' '){${onclick}}">
+    <div class="dd-check">${isOn?'✓':''}</div>${label}
+  </div>`;
+}
+function updateFiltrosLabel(){
+  const parts=[];
+  if(curGroup!=='Todos')parts.push(curGroup);
+  if(curCountry)parts.push(curCountry);
+  const btn=document.getElementById('dd-btn-filtros');
+  document.getElementById('filtros-label').textContent=parts.length?parts.join(' · '):'Filtros';
+  btn.classList.toggle('active-filter',parts.length>0);
+}
+
+function toggleDD(which){
+  ['lista','filtros'].forEach(m=>{
+    const menu=document.getElementById('dd-menu-'+m);
+    const btn=document.getElementById('dd-btn-'+m);
+    if(m===which){const isOpen=menu.classList.contains('open');menu.classList.toggle('open',!isOpen);btn.classList.toggle('on',!isOpen);}
+    else{menu.classList.remove('open');btn.classList.remove('on');}
+  });
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.dropdown-wrap')){
+    document.querySelectorAll('.dd-menu').forEach(m=>m.classList.remove('open'));
+    document.querySelectorAll('.dd-btn').forEach(b=>b.classList.remove('on'));
+  }
+});
+function setLista(key){
+  document.querySelectorAll('[id^="lista-"]').forEach(el=>{
+    el.classList.toggle('on',el.id==='lista-'+key);
+    el.querySelector('.dd-check').textContent=el.id==='lista-'+key?'✓':'';
+  });
+  toggleDD('lista');loadLista(key);
+}
+function setCountry(c){curCountry=c;buildFilterMenus();applyFilter();}
+function setGroup(g){curGroup=g;buildFilterMenus();applyFilter();}
+function doSearch(){curSearch=document.getElementById('search').value;applyFilter();}
+
+function applyFilter(){
+  const q=(curSearch||'').toLowerCase();
+  filtered=all.filter((c,i)=>{
+    if(curTab==='favs'&&!favs.has(i))return false;
+    if(q&&!c.name.toLowerCase().includes(q)&&!(c.country||'').toLowerCase().includes(q))return false;
+    if(curCountry&&c.country!==curCountry)return false;
+    if(curGroup!=='Todos'&&c.group!==curGroup)return false;
+    return true;
+  });
+  renderList();
+}
+
+function renderList(){
+  if(curTab==='hist'){renderHist();return;}
+  const list=document.getElementById('ch-list');
+  if(!filtered.length){list.innerHTML='<div class="empty-s">Sin resultados</div>';return;}
+  const display=filtered.slice(0,300);
+  list.innerHTML=display.map(c=>{
+    const i=all.indexOf(c);
+    const isOn=i===activeIdx;const isFav=favs.has(i);
+    const init=c.name.substring(0,2).toUpperCase();
+    const logo=c.logo?`<img src="${c.logo}" onerror="this.style.display='none'" alt="" /><span style="display:none">${init}</span>`:`<span>${init}</span>`;
+    return`<div class="ch-row${isOn?' on':''}" id="row-${i}" role="option" aria-selected="${isOn}" tabindex="0"
+      onclick="playIdx(${i})" onkeydown="handleRowKey(event,${i})">
+      <div class="ch-logo-sm">${logo}</div>
+      <div class="ch-info"><div class="ch-nm">${c.name}</div>${c.country?`<div class="ch-co">${c.country}</div>`:''}</div>
+      <button class="fav-btn${isFav?' on':''}" onclick="event.stopPropagation();toggleFav(${i})" tabindex="-1" aria-label="${isFav?'Quitar favorito':'Agregar favorito'}">${isFav?'★':'☆'}</button>
+    </div>`;
+  }).join('');
+  if(filtered.length>300)list.innerHTML+=`<div class="empty-s">+${filtered.length-300} más — filtrá para ver</div>`;
+  const ar=document.getElementById('row-'+activeIdx);
+  if(ar)ar.scrollIntoView({block:'nearest'});
+}
+
+function handleRowKey(e,idx){
+  if(e.key==='Enter'||e.key===' '){e.preventDefault();playIdx(idx);}
+  else if(e.key==='ArrowDown'){e.preventDefault();const next=e.currentTarget.nextElementSibling;if(next&&next.classList.contains('ch-row'))next.focus();}
+  else if(e.key==='ArrowUp'){e.preventDefault();const prev=e.currentTarget.previousElementSibling;if(prev&&prev.classList.contains('ch-row'))prev.focus();}
+}
+
+function renderHist(){
+  const list=document.getElementById('ch-list');
+  if(!hist.length){list.innerHTML='<div class="empty-s">Todavía no viste ningún canal.</div>';return;}
+  list.innerHTML='<div class="hist-list">'+hist.map(h=>{
+    const init=h.name.substring(0,2).toUpperCase();
+    const logo=h.logo?`<img src="${h.logo}" onerror="this.style.display='none'" alt="" />`:`<span>${init}</span>`;
+    return`<div class="hist-row" tabindex="0" onclick="playUrl('${esc(h.url)}','${esc(h.name)}','${esc(h.logo||'')}')">
+      <div class="hist-logo">${logo}</div>
+      <div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--tx0)">${h.name}</div><div style="font-size:9px;color:var(--tx2)">${h.country||''} · ${h.time}</div></div>
+      <span style="font-size:14px;color:var(--tx2)">▶</span>
+    </div>`;
+  }).join('')+'</div>';
+}
+
+function esc(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+function setTab(t){
+  curTab=t;
+  document.querySelectorAll('.ntab').forEach((b,i)=>b.classList.toggle('on',['all','favs','hist'][i]===t));
+  applyFilter();
+}
+function toggleFav(i){
+  if(favs.has(i))favs.delete(i);else favs.add(i);
+  document.getElementById('fav-count').textContent=favs.size;
+  renderList();
+}
+function toggleSidebar(){
+  sidebarOpen=!sidebarOpen;
+  document.getElementById('sidebar').classList.toggle('collapsed',!sidebarOpen);
+  document.getElementById('toggle-btn').textContent=sidebarOpen?'◀ Ocultar':'▶ Mostrar';
+}
+function addToHist(ch){
+  hist=hist.filter(h=>h.url!==ch.url);
+  hist.unshift({...ch,time:new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})});
+  if(hist.length>20)hist.pop();
+  document.getElementById('hist-count').textContent=hist.length;
+}
+function showOSD(idx){
+  const c=all[idx];const pos=filtered.indexOf(c)+1;
+  document.getElementById('osd-num').textContent='Canal '+pos+' de '+filtered.length;
+  document.getElementById('osd-name').textContent=c.name;
+  document.getElementById('osd-grp').textContent=(c.group||'')+(c.country?' · '+c.country:'');
+  const osd=document.getElementById('ch-osd');osd.style.display='block';
+  clearTimeout(osd._t);osd._t=setTimeout(()=>{osd.style.display='none';},2500);
+}
+function setDot(s){document.getElementById('live-dot').className='live-dot'+(s==='on'?' on':s==='loading'?' loading':'');}
+function showVol(v){
+  const bar=document.getElementById('vol-bar');
+  document.getElementById('vol-fill').style.height=Math.round(v*100)+'%';
+  document.getElementById('vol-label').textContent=Math.round(v*100)+'%';
+  bar.classList.add('show');clearTimeout(volTimer);
+  volTimer=setTimeout(()=>bar.classList.remove('show'),1500);
+}
+function zapNext(){if(!filtered.length)return;const ci=filtered.indexOf(all[activeIdx]);playIdx(all.indexOf(filtered[(ci+1)%filtered.length]));}
+function zapPrev(){if(!filtered.length)return;const ci=filtered.indexOf(all[activeIdx]);playIdx(all.indexOf(filtered[(ci-1+filtered.length)%filtered.length]));}
+function changeQuality(){
+  if(!hls)return;
+  const q=document.getElementById('qual-sel').value;
+  if(q==='auto'){hls.currentLevel=-1;return;}
+  const sorted=[...hls.levels].map((l,i)=>({...l,i})).sort((a,b)=>a.bitrate-b.bitrate);
+  hls.currentLevel=q==='low'?sorted[0].i:sorted[Math.floor(sorted.length/2)].i;
+}
+function playIdx(idx){activeIdx=idx;addToHist(all[idx]);renderList();showOSD(idx);playUrl(all[idx].url,all[idx].name,all[idx].logo||'');}
+function playDirect(){const u=document.getElementById('durl').value.trim();if(u)playUrl(u,u,'');}
+function playUrl(url,name){
+  document.getElementById('now-name').textContent=name;
+  document.getElementById('now-sub').textContent='Conectando...';
+  setDot('loading');
+  const vid=document.getElementById('vid');
+  const ov=document.getElementById('vid-overlay');
+  document.getElementById('vid-msg').textContent='Conectando...';
+  ov.style.display='flex';
+  if(hls){hls.destroy();hls=null;}
+  const tryPlay=()=>{
+    vid.play().then(()=>{ov.style.display='none';setDot('on');document.getElementById('now-sub').textContent='En vivo · ← → zapping · ↑ ↓ volumen';setTimeout(changeQuality,600);})
+      .catch(()=>{document.getElementById('vid-msg').textContent='Presioná ▶ para reproducir';setDot('on');});
+  };
+  const isHLS=url.includes('.m3u8')||url.includes('/live')||url.includes('/stream')||/:\d{4,5}\//.test(url);
+  if(Hls.isSupported()&&isHLS){
+    hls=new Hls({enableWorker:false,maxBufferLength:10,maxMaxBufferLength:20,maxBufferSize:20*1000*1000,startLevel:-1,abrEwmaFastLive:3,abrEwmaSlowLive:9});
+    hls.loadSource(url);hls.attachMedia(vid);
+    hls.on(Hls.Events.MANIFEST_PARSED,tryPlay);
+    hls.on(Hls.Events.ERROR,(_,d)=>{if(d.fatal){ov.style.display='flex';setDot('');document.getElementById('vid-msg').textContent='Canal offline o bloqueado por CORS';document.getElementById('now-sub').textContent='No disponible';}});
+  }else if(vid.canPlayType('application/vnd.apple.mpegurl')){
+    vid.src=url;vid.load();vid.oncanplay=tryPlay;
+  }else{
+    vid.src=url;vid.load();vid.oncanplay=tryPlay;
+    vid.onerror=()=>{ov.style.display='flex';setDot('');document.getElementById('vid-msg').textContent='No se pudo reproducir';};
+  }
+}
+
+// Teclado global — flechas para zapping/volumen cuando no hay foco en input
+document.addEventListener('keydown',e=>{
+  const tag=document.activeElement.tagName;
+  const inInput=tag==='INPUT'||tag==='SELECT'||tag==='TEXTAREA';
+  const inList=document.activeElement.classList.contains('ch-row');
+  const vid=document.getElementById('vid');
+  if(e.key==='ArrowRight'&&!inInput&&!inList){e.preventDefault();zapNext();}
+  else if(e.key==='ArrowLeft'&&!inInput&&!inList){e.preventDefault();zapPrev();}
+  else if(e.key==='ArrowUp'&&!inInput&&!inList){e.preventDefault();vid.volume=Math.min(1,+(vid.volume+0.1).toFixed(1));showVol(vid.volume);}
+  else if(e.key==='ArrowDown'&&!inInput&&!inList){e.preventDefault();vid.volume=Math.max(0,+(vid.volume-0.1).toFixed(1));showVol(vid.volume);}
+  else if((e.key==='f'||e.key==='F')&&!inInput){vid.requestFullscreen&&vid.requestFullscreen();}
+  // MediaKeys del control remoto
+  else if(e.key==='MediaPlayPause'||e.key==='Play'){vid.paused?vid.play():vid.pause();}
+  else if(e.key==='MediaTrackNext'){zapNext();}
+  else if(e.key==='MediaTrackPrevious'){zapPrev();}
+});
+
+loadLista('ar');
+</script>
+</body>
+</html>
